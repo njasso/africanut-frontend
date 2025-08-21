@@ -1,0 +1,16 @@
+# Fichiers de configuration
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Dépendances Node
+/node_modules
+
+# Fichiers de build
+/build
+
+# Fichiers de l'OS et de l'éditeur
+.DS_Store
+.vscode
