@@ -1,41 +1,45 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5005';
+import axios from 'axios';
+
+// Utilisez la variable d'environnement en priorité, sinon l'URL de Railway
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://africanut-backend-postgres-production.up.railway.app';
+let token = localStorage.getItem('token') || null;
 
 export function getToken() {
   return localStorage.getItem('token');
 }
 
-export function setToken(token) {
+export function setToken(newToken) {
+  token = newToken;
   if (token) {
     localStorage.setItem('token', token);
   } else {
-    localStorage.removeItem('token'); // possibilité de déconnexion
+    localStorage.removeItem('token');
   }
 }
 
 export async function api(path, options = {}) {
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options.headers || {}),
-  };
+  try {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
 
-  // Ajouter le token si présent
-  const token = getToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const config = {
+      url: `${API_BASE_URL}${path}`,
+      method: options.method || 'GET',
+      headers,
+      data: options.body,
+    };
+
+    const response = await axios(config);
+    return response.data;
+
+  } catch (error) {
+    console.error('API call failed:', error.response?.data || error.message);
+    throw error;
   }
-
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || 'Erreur API');
-  }
-
-  const contentType = response.headers.get('content-type') || '';
-  return contentType.includes('application/json')
-    ? response.json()
-    : response.text();
 }
