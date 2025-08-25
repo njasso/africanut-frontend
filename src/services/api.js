@@ -1,3 +1,4 @@
+// src/services/api.js
 import axios from 'axios';
 
 // URL de base : priorise la variable d'environnement, sinon Railway
@@ -35,10 +36,9 @@ export async function api(path, options = {}) {
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const config = {
-      url: `${API_BASE_URL}${path}`,
+      url: `${API_URL}${path}`, // Corrigé : API_BASE_URL → API_URL
       method: options.method || 'GET',
       headers,
-      // On n'envoie le body que si ce n'est pas un GET
       ...(options.method && options.method.toUpperCase() !== 'GET' && options.body
         ? { data: options.body }
         : {}),
