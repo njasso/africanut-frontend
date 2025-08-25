@@ -3,178 +3,182 @@ import { Trash2, Edit } from 'lucide-react';
 
 // Données d'entreprise
 const companies = [
-  { slug: "africanut-fish-market", name: "AFRICANUT FISH MARKET" },
-  { slug: "magaton-provender", name: "MAGATON PROVENDER" },
-  { slug: "nouvelle-academie-numerique-africaine", name: "NOUVELLE ACADEMIE NUMERIQUE AFRICAINE" },
-  { slug: "africanut-media", name: "AFRICANUT MEDIA" },
-  { slug: "gic-ocenaut", name: "GIC OCENAUT" }
+  { slug: "africanut-fish-market", name: "AFRICANUT FISH MARKET" },
+  { slug: "magaton-provender", name: "MAGATON PROVENDER" },
+  { slug: "nouvelle-academie-numerique-africaine", name: "NOUVELLE ACADEMIE NUMERIQUE AFRICAINE" },
+  { slug: "africanut-media", name: "AFRICANUT MEDIA" },
+  { slug: "gic-ocenaut", name: "GIC OCENAUT" }
 ];
 
 const AUTH_TOKEN_KEY = 'token';
+const BASE_URL = 'https://africanut-backend-production.up.railway.app'; // <- URL complète Railway
 
-const fetchWithAuth = async (url, options = {}) => {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) throw new Error("Aucun token d'authentification trouvé.");
-  const headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
-  const response = await fetch(url, { ...options, headers });
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    const errorMessage = errorBody?.error || `Erreur API. Statut: ${response.status}`;
-    throw new Error(errorMessage);
-  }
-  return response.json();
+const fetchWithAuth = async (endpoint, options = {}) => {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) throw new Error("Aucun token d'authentification trouvé.");
+
+  const headers = { 
+    'Authorization': `Bearer ${token}`, 
+    ...options.headers 
+  };
+
+  const response = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
+  
+  const text = await response.text();
+  try {
+    const data = JSON.parse(text);
+    if (!response.ok) throw new Error(data.error || `Erreur API. Statut: ${response.status}`);
+    return data;
+  } catch (err) {
+    console.error("Réponse brute du serveur:", text);
+    throw new Error("La réponse du serveur n'est pas du JSON valide");
+  }
 };
 
 export default function HR() {
-  const CLOUDINARY_CLOUD_NAME = 'djhyztec8';
-  const CLOUDINARY_UPLOAD_PRESET = 'africanut';
+  const CLOUDINARY_CLOUD_NAME = 'djhyztec8';
+  const CLOUDINARY_UPLOAD_PRESET = 'africanut';
 
-  const [items, setItems] = useState([]);
-  const [form, setForm] = useState({
-    name: '', role: '', companySlug: '', date_of_birth: '', email: '',
-    nationality: '', contract_type: '', phone: '', address: '', salary: '', photo_url: ''
-  });
-  const [editMode, setEditMode] = useState(false);
-  const [currentEmployeeId, setCurrentEmployeeId] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  
-  // Nouveaux états pour la modale de confirmation
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [employeeToDelete, setEmployeeToDelete] = useState(null);
+  const [items, setItems] = useState([]);
+  const [form, setForm] = useState({
+    name: '', role: '', companySlug: '', date_of_birth: '', email: '',
+    nationality: '', contract_type: '', phone: '', address: '', salary: '', photo_url: ''
+  });
+  const [editMode, setEditMode] = useState(false);
+  const [currentEmployeeId, setCurrentEmployeeId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const loadEmployees = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const employees = await fetchWithAuth('/api/employees');
-      setItems(employees);
-    } catch (err) {
-      console.error("Erreur récupération employés:", err);
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState(null);
 
-  useEffect(() => {
-    const token = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (token) loadEmployees();
-    else setError("Veuillez vous connecter pour voir les informations des employés.");
-  }, [loadEmployees]);
+  const loadEmployees = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const employees = await fetchWithAuth('/api/employees');
+      setItems(employees);
+    } catch (err) {
+      console.error("Erreur récupération employés:", err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  const resetForm = () => setForm({
-    name: '', role: '', companySlug: '', date_of_birth: '', email: '',
-    nationality: '', contract_type: '', phone: '', address: '', salary: '', photo_url: ''
-  });
+  useEffect(() => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (token) loadEmployees();
+    else setError("Veuillez vous connecter pour voir les informations des employés.");
+  }, [loadEmployees]);
 
-  const addOrUpdate = async (e) => {
-    e.preventDefault();
-    if (!form.name || !form.role || !form.companySlug) {
-      setError('Veuillez remplir les champs obligatoires.');
-      return;
-    }
-    setIsLoading(true); setError(null);
-    try {
-      const payload = {
-        ...form,
-        salary: form.salary ? Number(form.salary) : null
-      };
+  const resetForm = () => setForm({
+    name: '', role: '', companySlug: '', date_of_birth: '', email: '',
+    nationality: '', contract_type: '', phone: '', address: '', salary: '', photo_url: ''
+  });
 
-      if (editMode && currentEmployeeId) {
-        await fetchWithAuth(`/api/employees/${currentEmployeeId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      } else {
-        await fetchWithAuth('/api/employees', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
-      loadEmployees();
-      resetForm();
-      setEditMode(false);
-      setCurrentEmployeeId(null);
-    } catch (err) { setError(err.message); } finally { setIsLoading(false); }
-  };
+  const addOrUpdate = async (e) => {
+    e.preventDefault();
+    if (!form.name || !form.role || !form.companySlug) {
+      setError('Veuillez remplir les champs obligatoires.');
+      return;
+    }
+    setIsLoading(true); setError(null);
+    try {
+      const payload = { ...form, salary: form.salary ? Number(form.salary) : null };
 
-  // Première étape : afficher la modale
-  const remove = (employee) => {
-    setEmployeeToDelete(employee);
-    setShowDeleteModal(true);
-  };
-  
-  // Deuxième étape : supprimer l'employé après confirmation
-  const confirmDelete = async () => {
-    if (!employeeToDelete) return;
-    setIsLoading(true); setError(null);
-    try {
-      await fetchWithAuth(`/api/employees/${employeeToDelete.id}`, { method: 'DELETE' });
-      loadEmployees();
-      setShowDeleteModal(false);
-      setEmployeeToDelete(null);
-    } catch (err) { 
-      setError(err.message);
-    } finally { 
-      setIsLoading(false); 
-    }
-  };
-  
-  const cancelDelete = () => {
-    setShowDeleteModal(false);
-    setEmployeeToDelete(null);
-  };
+      if (editMode && currentEmployeeId) {
+        await fetchWithAuth(`/api/employees/${currentEmployeeId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        await fetchWithAuth('/api/employees', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+      loadEmployees();
+      resetForm();
+      setEditMode(false);
+      setCurrentEmployeeId(null);
+    } catch (err) { setError(err.message); } finally { setIsLoading(false); }
+  };
 
-  const startEdit = (employee) => {
-    setEditMode(true);
-    setCurrentEmployeeId(employee.id);
-    setForm({
-      name: employee.name || '',
-      role: employee.role || '',
-      companySlug: employee.company?.slug || '',
-      date_of_birth: employee.date_of_birth ? employee.date_of_birth.split('T')[0] : '',
-      email: employee.email || '',
-      nationality: employee.nationality || '',
-      contract_type: employee.contract_type || '',
-      phone: employee.phone || '',
-      address: employee.address || '',
-      salary: employee.salary || '',
-      photo_url: employee.photo_url || ''
-    });
-  };
+  const remove = (employee) => {
+    setEmployeeToDelete(employee);
+    setShowDeleteModal(true);
+  };
 
-  const handlePhotoUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) { setError("Aucun fichier sélectionné."); return; }
+  const confirmDelete = async () => {
+    if (!employeeToDelete) return;
+    setIsLoading(true); setError(null);
+    try {
+      await fetchWithAuth(`/api/employees/${employeeToDelete.id}`, { method: 'DELETE' });
+      loadEmployees();
+      setShowDeleteModal(false);
+      setEmployeeToDelete(null);
+    } catch (err) { 
+      setError(err.message);
+    } finally { 
+      setIsLoading(false); 
+    }
+  };
 
-    const allowedTypes = ["image/jpeg","image/jpg","image/png"];
-    if (!allowedTypes.includes(file.type)) { setError("Format non supporté."); return; }
-    if (file.size > 5*1024*1024) { setError("Image trop volumineuse (>5MB)."); return; }
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setEmployeeToDelete(null);
+  };
 
-    setIsUploading(true); setError(null);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  const startEdit = (employee) => {
+    setEditMode(true);
+    setCurrentEmployeeId(employee.id);
+    setForm({
+      name: employee.name || '',
+      role: employee.role || '',
+      companySlug: employee.company?.slug || '',
+      date_of_birth: employee.date_of_birth ? employee.date_of_birth.split('T')[0] : '',
+      email: employee.email || '',
+      nationality: employee.nationality || '',
+      contract_type: employee.contract_type || '',
+      phone: employee.phone || '',
+      address: employee.address || '',
+      salary: employee.salary || '',
+      photo_url: employee.photo_url || ''
+    });
+  };
 
-    try {
-      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method:'POST', body: formData });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.message || "Erreur upload image.");
-      setForm(prev => ({ ...prev, photo_url: data.secure_url }));
-    } catch(err) { console.error(err); setError(`Upload échoué: ${err.message}`); }
-    finally { setIsUploading(false); }
-  };
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) { setError("Aucun fichier sélectionné."); return; }
 
-  const filteredItems = items.filter(e => 
-    e.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.role?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (e.company?.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+    const allowedTypes = ["image/jpeg","image/jpg","image/png"];
+    if (!allowedTypes.includes(file.type)) { setError("Format non supporté."); return; }
+    if (file.size > 5*1024*1024) { setError("Image trop volumineuse (>5MB)."); return; }
+
+    setIsUploading(true); setError(null);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+    try {
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method:'POST', body: formData });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error?.message || "Erreur upload image.");
+      setForm(prev => ({ ...prev, photo_url: data.secure_url }));
+    } catch(err) { console.error(err); setError(`Upload échoué: ${err.message}`); }
+    finally { setIsUploading(false); }
+  };
+
+  const filteredItems = items.filter(e => 
+    e.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    e.role?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (e.company?.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   return (
     <div className="font-sans antialiased bg-gray-50 bg-repeat bg-[url('https://res.cloudinary.com/djhyztec8/image/upload/v1755531482/17973908_Converted_gbo8he.jpg')]">
