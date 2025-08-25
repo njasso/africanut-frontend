@@ -82,7 +82,8 @@ const ResourceForm = ({ resourceName, onSuccess, onCancel, formFields }) => {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const { isAuthenticated } = useAuth();
-    const apiEndpoint = `http://localhost:5005/api/${resourceName}`;
+    const API_URL = 'https://africanut-backend-postgres-production.up.railway.app';
+
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -229,7 +230,8 @@ const ResourceList = ({ resourceName, renderCard, renderModalContent, formFields
     const [resourceToDelete, setResourceToDelete] = useState(null);
 
     const { isAuthenticated } = useAuth();
-    const apiEndpoint = `http://localhost:5005/api/${resourceName}`;
+    const API_URL = 'https://africanut-backend-postgres-production.up.railway.app';
+
 
  useEffect(() => {
         const fetchResources = async () => {
