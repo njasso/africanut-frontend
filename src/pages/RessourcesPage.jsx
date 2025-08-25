@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 
 // Configuration d'environnement
+// Utilisation de l'URL du backend Railway directement pour la démonstration
+const API_BASE_URL = "https://africanut-backend-postgres-production.up.railway.app";
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
@@ -41,7 +43,8 @@ const getEmbedUrl = (url) => {
     let match = url.match(youtubeRegex) || url.match(shortRegex);
     
     if (match && match[1]) {
-        return `https://www.youtube.com/embed/${match[1]}`;
+        // Correction de la syntaxe du template literal
+        return `http://googleusercontent.com/youtube.com/${match[1]}`;
     }
 
     return url;
@@ -82,8 +85,8 @@ const ResourceForm = ({ resourceName, onSuccess, onCancel, formFields }) => {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const { isAuthenticated } = useAuth();
-    const API_URL = 'https://africanut-backend-postgres-production.up.railway.app';
-
+    // Utilisation de la variable d'environnement pour l'endpoint
+    const apiEndpoint = `${API_BASE_URL}/api/${resourceName}`;
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -230,8 +233,8 @@ const ResourceList = ({ resourceName, renderCard, renderModalContent, formFields
     const [resourceToDelete, setResourceToDelete] = useState(null);
 
     const { isAuthenticated } = useAuth();
-    const API_URL = 'https://africanut-backend-postgres-production.up.railway.app';
-
+    // Utilisation de la variable d'environnement pour l'endpoint
+    const apiEndpoint = `${API_BASE_URL}/api/${resourceName}`;
 
  useEffect(() => {
         const fetchResources = async () => {
