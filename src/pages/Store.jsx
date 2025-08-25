@@ -237,10 +237,13 @@ export default function Store() {
     const controller = new AbortController();
     const signal = controller.signal;
 
+    // Définir l'URL de l'API. La variable d'environnement n'est pas utilisée pour éviter les erreurs de compilation.
+    const API_URL = 'http://localhost:5005';
+
     const fetchData = async () => {
       try {
         const [productsRes, savedCart, savedCustomerInfo] = await Promise.allSettled([
-          axios.get('/api/products', { signal }),
+          axios.get(`${API_URL}/api/products`, { signal }),
           localStorage.getItem('cart'),
           localStorage.getItem('customerInfo')
         ]);
@@ -310,23 +313,16 @@ export default function Store() {
   const handleUpdateQuantity = useCallback((productId, newQuantity) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
-    
     if (newQuantity > product.stock_quantity) {
       setMessageBox(`Stock insuffisant. Il ne reste que ${product.stock_quantity} unité(s) de ce produit.`);
       setMessageType('warning');
       return;
     }
-    
     if (newQuantity < 1) {
       handleRemoveFromCart(productId);
       return;
     }
-    
-    setCart(prev =>
-      prev.map(item =>
-        item.id === productId ? { ...item, quantity: newQuantity } : item
-      )
-    );
+    setCart(prev => prev.map(item => item.id === productId ? { ...item, quantity: newQuantity } : item ));
   }, [products]);
 
   const handleRemoveFromCart = useCallback((productId) => {
@@ -336,25 +332,13 @@ export default function Store() {
   }, []);
 
   const handleCustomerInfoChange = (field, value) => {
-    setCustomerInfo(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setCustomerInfo(prev => ({ ...prev, [field]: value }));
   };
-  
+
   const generateWhatsAppMessage = useCallback((orderId) => {
     const orderDetails = cart.map(item => `${item.name} (x${item.quantity})`).join(', ');
     const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const message = `Bonjour, je souhaite commander :
-${orderDetails}.
-Total: ${total.toLocaleString()} F CFA.
-
-Informations de livraison:
-Nom: ${customerInfo.name}
-Téléphone: ${customerInfo.phone}
-${customerInfo.address ? `Adresse: ${customerInfo.address}` : ''}
-Numéro de commande: #${orderId}`;
-    
+    const message = `Bonjour, je souhaite commander : ${orderDetails}. Total: ${total.toLocaleString()} F CFA. Informations de livraison: Nom: ${customerInfo.name} Téléphone: ${customerInfo.phone} ${customerInfo.address ? `Adresse: ${customerInfo.address}` : ''} Numéro de commande: #${orderId}`;
     return message;
   }, [cart, customerInfo]);
 
@@ -374,7 +358,6 @@ Numéro de commande: #${orderId}`;
       setMessageType('info');
       return;
     }
-    
     if (!companyId) {
       setMessageBox('Erreur: L\'ID de l\'entreprise est manquant. Impossible de passer la commande.');
       setMessageType('error');
@@ -386,7 +369,7 @@ Numéro de commande: #${orderId}`;
       const product = products.find(p => p.id === item.id);
       return product && item.quantity > product.stock_quantity;
     });
-    
+
     if (outOfStockItems.length > 0) {
       const productNames = outOfStockItems.map(item => item.name).join(', ');
       setMessageBox(`Certains produits ne sont plus disponibles en quantité suffisante: ${productNames}. Veuillez ajuster votre panier.`);
@@ -412,10 +395,9 @@ Numéro de commande: #${orderId}`;
       };
 
       const savedOrder = await saveOrderToDatabase(orderData);
-      
       const message = generateWhatsAppMessage(savedOrder.id);
       const whatsappLink = `https://wa.me/237620370286?text=${encodeURIComponent(message)}`;
-      
+
       setCart([]);
       setMessageBox('Commande enregistrée ! Redirection vers WhatsApp...');
       setMessageType('info');
@@ -438,330 +420,205 @@ Numéro de commande: #${orderId}`;
 
   if (isLoading) {
     return (
-      <div className="min-h-screen p-4 md:p-8 bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('https://res.cloudinary.com/djhyztec8/image/upload/v1755553268/WhatsApp_Image_2025-08-18_%C3%A0_23.40.08_2e0974c3_dagux0.jpg')" }} >
-        <div className="relative z-10">
-          <h1 className="text-3xl font-bold text-center text-white mb-8">Nos Produits</h1>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <ProductSkeleton key={i} />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!products.length) {
-    return (
-      <div className="min-h-screen p-4 md:p-8 bg-cover bg-center bg-fixed flex items-center justify-center" style={{ backgroundImage: "url('https://res.cloudinary.com/djhyztec8/image/upload/v1755553268/WhatsApp_Image_2025-08-18_%C3%A0_23.40.08_2e0974c3_dagux0.jpg')" }} >
-        <div className="relative z-10 bg-white/90 p-8 rounded-2xl text-center">
-          <h1 className="text-3xl font-bold text-brand-brown mb-4">Nos Produits</h1>
-          <p className="text-neutral-600 text-xl">Aucun produit disponible pour le moment.</p>
-          <p className="text-neutral-500 mt-2">Veuillez réessayer ultérieurement.</p>
+      <div className="min-h-screen p-4 md:p-8 bg-gray-50 flex flex-col font-sans text-neutral-800">
+        <h1 className="text-3xl font-bold mb-8 text-brand-brown text-center">Boutique</h1>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <ProductSkeleton key={index} />
+          ))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8 bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('https://res.cloudinary.com/djhyztec8/image/upload/v1755553268/WhatsApp_Image_2025-08-18_%C3%A0_23.40.08_2e0974c3_dagux0.jpg')" }} >
-      {messageBox && (
-        <MessageBox message={messageBox} onClose={() => setMessageBox(null)} type={messageType} />
-      )}
-      {/* Formulaire d'informations client */}
-      {showCustomerForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4">Informations de livraison</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Nom complet *</label>
-                <input type="text" value={customerInfo.name} onChange={(e) => handleCustomerInfoChange('name', e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="Votre nom" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Téléphone *</label>
-                <input type="tel" value={customerInfo.phone} onChange={(e) => handleCustomerInfoChange('phone', e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="Votre numéro de téléphone" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Adresse</label>
-                <input type="text" value={customerInfo.address} onChange={(e) => handleCustomerInfoChange('address', e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="Votre adresse" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <button
-                onClick={() => setShowCustomerForm(false)}
-                className="px-4 py-2 text-gray-600 rounded-lg hover:bg-gray-100 transition"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleOrder}
-                className="px-4 py-2 bg-brand-green text-white rounded-lg font-semibold hover:bg-green-700 transition"
-              >
-                Confirmer
-              </button>
-            </div>
-          </div>
+    <div className="min-h-screen p-4 md:p-8 bg-gray-50 flex flex-col font-sans text-neutral-800">
+      <h1 className="text-3xl font-bold mb-4 md:mb-8 text-brand-brown text-center">Boutique</h1>
+
+      {/* Barre de recherche et filtres */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 p-4 bg-white rounded-2xl shadow-md">
+        <div className="relative w-full sm:w-1/2">
+          <input
+            type="text"
+            placeholder="Rechercher des produits..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 rounded-full border border-gray-300 focus:border-brand-green focus:ring-1 focus:ring-brand-green transition"
+            aria-label="Rechercher des produits"
+          />
+          <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
         </div>
-      )}
-
-      {/* Vue principale (produits) */}
-      <div className="relative z-10 max-w-7xl mx-auto">
-        {/* Header avec recherche et panier */}
-        <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 sticky top-0 z-20">
-          <div className="flex-1 w-full md:w-auto relative">
-            <input
-              type="text"
-              placeholder="Rechercher des produits..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full p-3 pl-10 rounded-2xl shadow-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-green transition"
-            />
-            <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition">
-                <X size={20} aria-label="Effacer la recherche" />
-              </button>
-            )}
-          </div>
-          
-          <div className="flex gap-4 w-full md:w-auto">
-            {categories.length > 0 && (
-              <div className="relative inline-block text-left w-full md:w-auto">
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full md:w-48 p-3 rounded-2xl shadow-lg border border-gray-200 appearance-none bg-white pr-8 focus:outline-none focus:ring-2 focus:ring-brand-green transition"
-                >
-                  <option value="all">Toutes les catégories</option>
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-                <ChevronDown size={20} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" aria-hidden="true" />
-              </div>
-            )}
-            
-            <button
-              className="relative p-3 bg-white rounded-2xl shadow-lg text-brand-brown hover:bg-gray-50 transition flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-brand-green"
-              onClick={() => {
-                const sidebar = document.getElementById('cart-sidebar');
-                if (sidebar) sidebar.classList.toggle('translate-x-full');
-              }}
-              aria-label="Ouvrir le panier"
+        
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto items-center gap-4">
+          <div className="relative w-full sm:w-auto">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="block w-full sm:w-48 appearance-none bg-white border border-gray-300 rounded-full py-2 px-4 pr-8 transition focus:outline-none focus:ring-1 focus:ring-brand-green"
+              aria-label="Filtrer par catégorie"
             >
-              <ShoppingCart size={24} aria-hidden="true" />
-              {cart.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                  {cart.length}
-                </span>
-              )}
-            </button>
+              <option value="all">Toutes les catégories</option>
+              {categories.map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+            <ChevronDown size={20} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" aria-hidden="true" />
           </div>
-        </header>
 
-        {/* Message de filtres */}
-        {(searchQuery || selectedCategory !== 'all') && (
-          <div className="text-center text-white/90 mb-4">
-            <p>
-              Affichage des produits pour{' '}
-              <span className="font-semibold">{selectedCategory === 'all' ? 'Toutes les catégories' : selectedCategory}</span>
-              {searchQuery && (
-                <>
-                  {' '}et la recherche <span className="font-semibold">"{searchQuery}"</span>
-                </>
-              )}
-            </p>
-            <button onClick={handleClearFilters} className="text-sm mt-1 underline hover:no-underline transition">
-              Effacer les filtres
-            </button>
-          </div>
-        )}
-
-        {/* Grille des produits */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredProducts.map(product => (
-            <div
-              key={product.id}
-              className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 flex flex-col items-center text-center transition-transform hover:scale-105 cursor-pointer"
-              onClick={() => handlePreviewProduct(product)}
-              aria-label={`Détails du produit ${product.name}`}
-            >
-              {product.photos && product.photos[0] ? (
-                <img
-                  src={product.photos[0]}
-                  alt={product.name}
-                  className="w-40 h-40 object-contain mb-4 rounded-lg"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-40 h-40 bg-gray-200 rounded-lg flex items-center justify-center mb-4 text-gray-500">
-                  <span className="text-xs">Pas d'image</span>
-                </div>
-              )}
-              <h2 className="text-xl font-semibold mb-1 text-brand-brown">{product.name}</h2>
-              <p className="text-sm text-neutral-600 mb-2 truncate w-full px-2">{product.description}</p>
-              <p className="text-lg font-bold text-brand-green">
-                {product.price.toLocaleString()} F CFA
-              </p>
-              <div className="text-sm font-medium mt-2">
-                {product.stock_quantity > 0 ? (
-                  <span className={`py-1 px-3 rounded-full text-white ${
-                    product.stock_quantity <= 5 ? 'bg-yellow-500' : 'bg-green-600'
-                  }`}>
-                    {product.stock_quantity} en stock
-                  </span>
-                ) : (
-                  <span className="py-1 px-3 rounded-full bg-red-500 text-white">
-                    Rupture de stock
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+          <button
+            onClick={handleClearFilters}
+            className="w-full sm:w-auto px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition"
+          >
+            Réinitialiser
+          </button>
         </div>
       </div>
+      
+      {/* Grille des produits */}
+      <div className="flex-grow">
+        {filteredProducts.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {filteredProducts.map(product => (
+              <div
+                key={product.id}
+                className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
+                onClick={() => handlePreviewProduct(product)}
+                aria-label={`Voir les détails de ${product.name}`}
+              >
+                <div className="relative w-full h-48 sm:h-56 overflow-hidden">
+                  <img
+                    src={product.photos[0]}
+                    alt={product.name}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Search size={32} className="text-white" />
+                  </div>
+                </div>
+                <div className="p-4 flex flex-col items-center text-center">
+                  <h3 className="text-lg font-semibold text-brand-brown truncate w-full">{product.name}</h3>
+                  <p className="font-bold text-lg text-brand-green mt-2">{product.price.toLocaleString()} F CFA</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-lg text-neutral-600">Aucun produit trouvé pour votre recherche.</p>
+          </div>
+        )}
+      </div>
 
-      {/* Sidebar du panier */}
-      <div
-        id="cart-sidebar"
-        className="fixed top-0 right-0 h-full w-full max-w-sm bg-gray-50 shadow-2xl z-40 transform translate-x-full transition-transform duration-300 overflow-y-auto p-6 flex flex-col"
-        role="complementary"
-        aria-label="Panier d'achat"
-      >
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-brand-brown">Votre Panier</h2>
+      {/* Panier et bouton de commande */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white shadow-xl rounded-t-2xl p-4 transition-transform duration-300">
+          <div className="flex justify-between items-center max-w-4xl mx-auto">
+            <div className="flex items-center gap-2">
+              <ShoppingCart size={24} className="text-brand-green" aria-hidden="true" />
+              <p className="text-xl font-bold">{cart.reduce((sum, item) => sum + item.quantity, 0)}</p>
+            </div>
+            <p className="text-lg font-semibold">Total: {cart.reduce((sum, item) => sum + item.price * item.quantity, 0).toLocaleString()} F CFA</p>
+            <button
+              onClick={() => setShowCustomerForm(true)}
+              className="px-6 py-2 bg-brand-green text-white rounded-full font-semibold shadow-md hover:bg-green-700 transition"
+            >
+              Passer la commande
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal pour le panier et les infos client */}
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 transition-opacity duration-300 ${showCustomerForm ? 'opacity-100 visible' : 'opacity-0 invisible'}`} aria-hidden={!showCustomerForm}>
+        <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md animate-scale-in relative">
           <button
-            onClick={() => {
-              const sidebar = document.getElementById('cart-sidebar');
-              if (sidebar) sidebar.classList.add('translate-x-full');
-            }}
-            className="p-2 text-gray-500 hover:text-gray-800 transition focus:outline-none focus:ring-2 focus:ring-brand-green rounded-full"
-            aria-label="Fermer le panier"
+            onClick={() => setShowCustomerForm(false)}
+            className="absolute top-4 right-4 text-neutral-500 hover:text-neutral-800 transition"
+            aria-label="Fermer le formulaire de commande"
           >
             <X size={24} aria-hidden="true" />
           </button>
-        </div>
-
-        {cart.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
-            <ShoppingCart size={48} className="mb-4" aria-hidden="true" />
-            <p>Votre panier est vide.</p>
-          </div>
-        ) : (
-          <>
-            <div className="flex-1 space-y-4">
-              {cart.map(item => (
-                <div key={item.id} className="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4">
-                  {item.photos && item.photos[0] ? (
-                    <img
-                      src={item.photos[0]}
-                      alt={item.name}
-                      className="w-16 h-16 object-contain rounded-lg flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-16 h-16 bg-gray-200 rounded-lg flex-shrink-0 flex items-center justify-center text-gray-500 text-xs">
-                      Pas d'image
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-brand-brown truncate">{item.name}</h3>
-                    <p className="text-sm font-medium text-brand-green">
-                      {item.price.toLocaleString()} F CFA
-                    </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <button
-                        onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                        className="p-1 bg-gray-200 rounded-full hover:bg-gray-300 transition focus:outline-none focus:ring-2 focus:ring-brand-green"
-                        aria-label="Diminuer la quantité"
-                      >
-                        <Minus size={16} aria-hidden="true" />
-                      </button>
-                      <span className="font-bold">{item.quantity}</span>
-                      <button
-                        onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                        className="p-1 bg-gray-200 rounded-full hover:bg-gray-300 transition focus:outline-none focus:ring-2 focus:ring-brand-green"
-                        aria-label="Augmenter la quantité"
-                        disabled={item.quantity >= (products.find(p => p.id === item.id)?.stock_quantity || Infinity)}
-                      >
-                        <Plus size={16} aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveFromCart(item.id)}
-                    className="p-2 text-gray-400 hover:text-red-500 transition focus:outline-none focus:ring-2 focus:ring-red-500 rounded-full"
-                    aria-label="Retirer du panier"
-                  >
-                    <Trash2 size={20} aria-hidden="true" />
-                  </button>
+          <h2 className="text-2xl font-bold mb-4 text-brand-brown">Votre Panier</h2>
+          <div className="max-h-64 overflow-y-auto mb-4 border-b pb-4">
+            {cart.map(item => (
+              <div key={item.id} className="flex items-center justify-between py-2 border-b last:border-b-0">
+                <div className="flex-1 min-w-0">
+                  <p className="text-neutral-800 font-medium truncate">{item.name}</p>
+                  <p className="text-sm text-neutral-600">{item.price.toLocaleString()} F CFA</p>
                 </div>
-              ))}
-            </div>
-
-            {/* Récapitulatif et bouton de commande */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex justify-between items-center font-bold text-lg text-brand-brown">
-                Total: {cart.reduce((sum, item) => sum + item.price * item.quantity, 0).toLocaleString()} F CFA
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)} className="p-1 bg-gray-200 rounded-full text-neutral-700 hover:bg-gray-300 transition" aria-label="Réduire la quantité"><Minus size={16} aria-hidden="true" /></button>
+                  <span className="font-semibold text-neutral-800">{item.quantity}</span>
+                  <button onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)} className="p-1 bg-gray-200 rounded-full text-neutral-700 hover:bg-gray-300 transition" aria-label="Augmenter la quantité"><Plus size={16} aria-hidden="true" /></button>
+                </div>
+                <button onClick={() => handleRemoveFromCart(item.id)} className="ml-4 text-red-500 hover:text-red-700 transition" aria-label="Retirer du panier"><Trash2 size={20} aria-hidden="true" /></button>
               </div>
-              
-              {/* Informations client résumées */}
-              {(customerInfo.name || customerInfo.phone) && (
-                <div className="mt-4 p-3 bg-gray-100 rounded-lg">
-                  <h4 className="font-semibold mb-2">Informations de livraison:</h4>
-                  <p className="text-sm">{customerInfo.name}</p>
-                  <p className="text-sm">{customerInfo.phone}</p>
-                  {customerInfo.address && <p className="text-sm">{customerInfo.address}</p>}
-                  <button
-                    onClick={() => setShowCustomerForm(true)}
-                    className="text-blue-500 text-sm mt-2 hover:text-blue-700 focus:outline-none focus:underline"
-                  >
-                    Modifier
-                  </button>
-                </div>
-              )}
-              
-              <button
-                onClick={handleOrder}
-                className="mt-6 w-full py-3 bg-green-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-green-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2"
-                disabled={cart.some(item => {
-                  const product = products.find(p => p.id === item.id);
-                  return product && item.quantity > product.stock_quantity;
-                })}
-              >
-                {/* SVG de l'icône WhatsApp */}
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-white" aria-hidden="true"><path d="M12.04 2C7.388 2 3.63 5.768 3.63 10.42v3.136L2 19.344l4.135-1.527L6.64 19.344l.115.228 3.504 3.498 3.682-.924 3.75 1.096L22.08 19.344l-1.63-1.527V10.42c0-4.652-3.758-8.42-8.42-8.42zm.006 1.758c3.774 0 6.84 3.066 6.84 6.84V16.63L18.4 18.252l-2.09-.646-1.506.646-1.464-.328-1.498.328-1.53.646-1.488-.646-1.436.328-1.488-.328L6.46 18.252l-.962-.958-1.543.646V10.42c0-3.774 3.066-6.84 6.84-6.84zm-.006 2.898c-1.87 0-3.386 1.516-3.386 3.386 0 1.87 1.516 3.386 3.386 3.386 1.87 0 3.386-1.516 3.386-3.386 0-1.87-1.516-3.386-3.386-3.386zm0 1.758c.968 0 1.758.79 1.758 1.758 0 .968-.79 1.758-1.758 1.758-.968 0-1.758-.79-1.758-1.758 0-.968.79-1.758 1.758-1.758z"/></svg> Commander via WhatsApp
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Modal de prévisualisation du produit */}
-      {previewProduct && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="product-preview-title"
-        >
-          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full relative">
-            <button
-              onClick={() => setPreviewProduct(null)}
-              className="absolute top-4 right-4 p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition focus:outline-none focus:ring-2 focus:ring-brand-green"
-              aria-label="Fermer la prévisualisation"
-            >
-              <X size={24} aria-hidden="true" />
-            </button>
-            <ProductPreview 
-              product={previewProduct} 
-              onClose={() => setPreviewProduct(null)} 
-              onAddToCart={handleAddToCart} 
+            ))}
+          </div>
+          <div className="mb-4">
+            <h3 className="text-lg font-bold mb-2 text-brand-brown">Informations client</h3>
+            <input
+              type="text"
+              placeholder="Nom complet"
+              value={customerInfo.name}
+              onChange={(e) => handleCustomerInfoChange('name', e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg mb-2 focus:border-brand-green focus:ring-1 focus:ring-brand-green"
+              required
+            />
+            <input
+              type="tel"
+              placeholder="Numéro de téléphone"
+              value={customerInfo.phone}
+              onChange={(e) => handleCustomerInfoChange('phone', e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg mb-2 focus:border-brand-green focus:ring-1 focus:ring-brand-green"
+              required
+            />
+            <input
+              type="text"
+              placeholder="Adresse (optionnel)"
+              value={customerInfo.address}
+              onChange={(e) => handleCustomerInfoChange('address', e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:border-brand-green focus:ring-1 focus:ring-brand-green"
             />
           </div>
+          <button
+            onClick={handleOrder}
+            className="w-full py-3 bg-brand-green text-white rounded-lg font-semibold hover:bg-green-700 transition shadow-lg"
+          >
+            Valider et commander ({cart.reduce((sum, item) => sum + item.price * item.quantity, 0).toLocaleString()} F CFA)
+          </button>
         </div>
+      </div>
+
+      {/* Message Box */}
+      {messageBox && (
+        <MessageBox
+          message={messageBox}
+          onClose={() => setMessageBox(null)}
+          type={messageType}
+        />
       )}
+
+      {/* Modal de prévisualisation du produit */}
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 transition-opacity duration-300 ${previewProduct ? 'opacity-100 visible' : 'opacity-0 invisible'}`} aria-hidden={!previewProduct}>
+        <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md animate-scale-in relative">
+          <button
+            onClick={() => setPreviewProduct(null)}
+            className="absolute top-4 right-4 text-neutral-500 hover:text-neutral-800 transition"
+            aria-label="Fermer la prévisualisation"
+          >
+            <X size={24} aria-hidden="true" />
+          </button>
+          {previewProduct && (
+            <ProductPreview
+              product={previewProduct}
+              onClose={() => setPreviewProduct(null)}
+              onAddToCart={handleAddToCart}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
-
