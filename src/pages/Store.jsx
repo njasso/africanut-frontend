@@ -2,6 +2,11 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ShoppingCart, Trash2, Search, ChevronDown, X, ChevronLeft, ChevronRight, Plus, Minus, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 
+// Configuration d'environnement
+const API_BASE_URL = "https://africanut-backend-postgres-production.up.railway.app";
+const companyId = '4809480a-c8cb-4990-afd7-e9337993825e';
+
+
 // Composant pour afficher des messages modaux
 const MessageBox = ({ message, onClose, type = 'info' }) => {
   const getIcon = () => {
@@ -214,7 +219,6 @@ export default function Store() {
     address: ''
   });
   const [showCustomerForm, setShowCustomerForm] = useState(false);
-  const [companyId] = useState('4809480a-c8cb-4990-afd7-e9337993825e');
 
   // Utiliser useMemo pour les produits filtrés
   const filteredProducts = useMemo(() => {
@@ -240,7 +244,7 @@ export default function Store() {
     const fetchData = async () => {
       try {
         const [productsRes, savedCart, savedCustomerInfo] = await Promise.allSettled([
-          axios.get('/api/products', { signal }),
+          axios.get(`${API_BASE_URL}/api/products`, { signal }),
           localStorage.getItem('cart'),
           localStorage.getItem('customerInfo')
         ]);
@@ -360,7 +364,7 @@ Numéro de commande: #${orderId}`;
 
   const saveOrderToDatabase = async (orderData) => {
     try {
-      const response = await axios.post('/api/orders', orderData);
+      const response = await axios.post(`${API_BASE_URL}/api/orders`, orderData);
       return response.data;
     } catch (error) {
       console.error('Erreur lors de la sauvegarde de la commande:', error);
@@ -730,7 +734,7 @@ Numéro de commande: #${orderId}`;
                 })}
               >
                 {/* SVG de l'icône WhatsApp */}
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-white" aria-hidden="true"><path d="M12.04 2C7.388 2 3.63 5.768 3.63 10.42v3.136L2 19.344l4.135-1.527L6.64 19.344l.115.228 3.504 3.498 3.682-.924 3.75 1.096L22.08 19.344l-1.63-1.527V10.42c0-4.652-3.758-8.42-8.42-8.42zm.006 1.758c3.774 0 6.84 3.066 6.84 6.84V16.63L18.4 18.252l-2.09-.646-1.506.646-1.464-.328-1.498.328-1.53.646-1.488-.646-1.436.328-1.488-.328L6.46 18.252l-.962-.958-1.543.646V10.42c0-3.774 3.066-6.84 6.84-6.84zm-.006 2.898c-1.87 0-3.386 1.516-3.386 3.386 0 1.87 1.516 3.386 3.386 3.386 1.87 0 3.386-1.516 3.386-3.386 0-1.87-1.516-3.386-3.386-3.386zm0 1.758c.968 0 1.758.79 1.758 1.758 0 .968-.79 1.758-1.758 1.758-.968 0-1.758-.79-1.758-1.758 0-.968.79-1.758 1.758-1.758z"/></svg> Commander via WhatsApp
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-white" aria-hidden="true"><path d="M12.04 2C7.388 2 3.63 5.768 3.63 10.42v3.136L2 19.344l4.135-1.527L6.64 19.344l.115.228 3.504 3.498 3.682-.924 3.75 1.096L22.08 19.344l-1.63-1.527V10.42c0-4.652-3.758-8.42-8.42-8.42zm.006 1.758c3.774 0 6.84 3.066 6.84 6.84V16.63L18.4 18.252l-2.09-.646-1.506.646-1.464-.328-1.498.328-1.53.646-1.488-.646-1.436.328-1.488-.328L6.46 18.252l-.962-.958-1.543.646V10.42c0-3.774 3.066-6.84 6.84-6.84zm-.006 2.898c-1.87 0-3.386 1.516-3.386 3.386 0 1.87 1.516 3.386 3.386 3.386 1.87 0 3.386-1.516 3.386-3.386 0-1.87-1.516-3.386-3.386-3.386zM12.04 12c.968 0 1.758.79 1.758 1.758 0 .968-.79 1.758-1.758 1.758-.968 0-1.758-.79-1.758-1.758 0-.968.79-1.758 1.758-1.758z"/></svg> Commander via WhatsApp
               </button>
             </div>
           </>
@@ -764,4 +768,3 @@ Numéro de commande: #${orderId}`;
     </div>
   );
 }
-
