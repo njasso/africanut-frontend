@@ -1,39 +1,40 @@
-import { useState } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { useNavigate } from 'react-router-dom'
+// src/components/Login.js
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
-  const { login } = useAuth()
-  const navigate = useNavigate()
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
     try {
-      const result = await login(email, password)
+      const result = await login(email, password);
       if (result.success) {
-        navigate('/') // redirection vers la page principale
+        navigate('/'); // Redirection vers la page principale
       } else {
-        setError(result.message || 'Connexion échouée')
+        setError(result.message || 'Échec de la connexion');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Connexion échouée')
+      setError(err.error || 'Échec de la connexion');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div
       className="min-h-screen flex items-center justify-center bg-cover bg-center"
-      style={{ backgroundImage: "url('/images/login-bg.jpg')" }} // Mets ton image dans public/images
+      style={{ backgroundImage: "url('/images/login-bg.jpg')" }}
     >
       <div className="max-w-sm w-full glass rounded-2xl p-6 bg-white/80 shadow-lg">
         <h2 className="text-xl font-semibold mb-3 text-center">Connexion</h2>
@@ -64,5 +65,5 @@ export default function Login() {
         </form>
       </div>
     </div>
-  )
+  );
 }
