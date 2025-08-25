@@ -1,24 +1,31 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { api, setToken } from '../services/api';
+import { api, setToken, getToken } from '../services/api';
 
-// Correctly export the context for direct use elsewhere if needed
 export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  // Use a single, synchronous initialization based on localStorage
-  const initialUser = JSON.parse(localStorage.getItem('user')) || null;
-  const initialToken = localStorage.getItem('token') || null;
-
-  const [user, setUser] = useState(initialUser);
-  const [isAuthenticated, setIsAuthenticated] = useState(!!initialUser && !!initialToken);
-  const [loading, setLoading] = useState(false); // Initial state is false as we've already checked localStorage
-
-  // If a token exists from localStorage, set it for API calls
-  useEffect(() => {
-    if (initialToken) {
-      setToken(initialToken);
+  const [user, setUser] = useState(() => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch (e) {
+      console.error("Failed to parse user from localStorage:", e);
+      return null;
     }
-  }, [initialToken]);
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState(!!user && !!getToken());
+  const [loading, setLoading] = useState(false);
+
+  // Set the token for API calls whenever the authentication state changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      const token = getToken();
+      if (token) {
+        setToken(token);
+      }
+    }
+  }, [isAuthenticated]);
 
   const login = async (email, password) => {
     setLoading(true);
@@ -27,11 +34,14 @@ export function AuthProvider({ children }) {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      setToken(token);
-      setUser(userData);
-      setIsAuthenticated(true);
+      
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('token', token);
+
+      setUser(userData);
+      setIsAuthenticated(true);
+      setToken(token); // Ensure the token is set immediately
+
       return { success: true };
     } catch (error) {
       console.error('Login failed:', error);
@@ -40,7 +50,7 @@ export function AuthProvider({ children }) {
       setLoading(false);
     }
   };
-
+ 
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
