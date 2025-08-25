@@ -1,70 +1,39 @@
-import { useState, useEffect } from 'react';
-import { PlusCircle, Trash2, Edit, Minus, Plus, FileText } from 'lucide-react';
-import axios from 'axios';
-import ProductForm from '../components/ProductForm.jsx';
+import { useState, useEffect } from "react";
+import { PlusCircle, Trash2, Edit, Minus, Plus, FileText } from "lucide-react";
+import apiClient from "../services/api.js"; // ✅ utilise ton instance axios
+import ProductForm from "../components/ProductForm.jsx";
 
-// ✅ Interceptors Axios pour inclure le token et gérer 401
-axios.interceptors.request.use(config => {
-  const token = localStorage.getItem('authToken') || 
-                localStorage.getItem('token') || 
-                sessionStorage.getItem('authToken') || 
-                sessionStorage.getItem('token');
-  
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
-axios.interceptors.response.use(
-  response => response,
-  error => {
-    if (error.response?.status === 401) {
-      alert('Session expirée. Veuillez vous reconnecter.');
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('token');
-      sessionStorage.removeItem('authToken');
-      sessionStorage.removeItem('token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
-
-// Composants modales
+// Composants modaux
 const MessageBox = ({ message, onConfirm, onCancel, onClose }) => (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div className="bg-white p-6 rounded-lg shadow-xl text-center w-80">
       <p className="text-lg font-semibold">{message}</p>
       <div className="mt-4 flex justify-center gap-4">
-        {onConfirm && <button onClick={onConfirm} className="px-4 py-2 bg-brand-green text-white rounded-lg hover:bg-green-700 transition">Oui</button>}
-        {onCancel && <button onClick={onCancel} className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-700 transition">Non</button>}
-        {!onConfirm && !onCancel && <button onClick={onClose} className="px-4 py-2 bg-brand-green text-white rounded-lg hover:bg-green-700 transition">OK</button>}
+        {onConfirm && (
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-brand-green text-white rounded-lg hover:bg-green-700 transition"
+          >
+            Oui
+          </button>
+        )}
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-700 transition"
+          >
+            Non
+          </button>
+        )}
+        {!onConfirm && !onCancel && (
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-brand-green text-white rounded-lg hover:bg-green-700 transition"
+          >
+            OK
+          </button>
+        )}
       </div>
-    </div>
-  </div>
-);
-
-const ReportModal = ({ onClose, report }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 relative">
-      <h2 className="text-2xl font-bold mb-4">Rapport de Stock</h2>
-      <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
-      {!Array.isArray(report) || report.length === 0 ? (
-        <p className="text-neutral-500">Aucun mouvement de stock pour la période sélectionnée.</p>
-      ) : (
-        <ul className="space-y-2 max-h-96 overflow-y-auto">
-          {report.map(movement => (
-            <li key={movement.id} className={`p-2 rounded-lg ${movement.type === 'entry' ? 'bg-green-50' : 'bg-red-50'}`}>
-              <span className="font-semibold">{movement.product?.name || 'Produit inconnu'}</span> :
-              <span className={`ml-2 font-bold ${movement.type === 'entry' ? 'text-green-600' : 'text-red-600'}`}>
-                {movement.type === 'entry' ? 'Entrée' : 'Sortie'} de {movement.quantity || 0}
-              </span>
-              <p className="text-sm text-neutral-500 mt-1">
-                {movement.movementDate ? new Date(movement.movementDate).toLocaleString() : ''}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   </div>
 );
@@ -78,8 +47,8 @@ export default function ProductManagement() {
   const [messageBox, setMessageBox] = useState(null);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [stockReport, setStockReport] = useState([]);
-  const [reportStart, setReportStart] = useState(new Date().toISOString().slice(0,10));
-  const [reportEnd, setReportEnd] = useState(new Date().toISOString().slice(0,10));
+  const [reportStart, setReportStart] = useState(new Date().toISOString().slice(0, 10));
+  const [reportEnd, setReportEnd] = useState(new Date().toISOString().slice(0, 10));
 
   // 📦 Charger produits et catégories
   useEffect(() => {
@@ -87,14 +56,26 @@ export default function ProductManagement() {
       setIsLoading(true);
       try {
         const [catRes, prodRes] = await Promise.all([
-          axios.get('/api/categories'),
-          axios.get('/api/products')
+          apiClient.get("/api/categories"),
+          apiClient.get("/api/products"),
         ]);
-        setCategories(Array.isArray(catRes.data) ? catRes.data : []);
-        setProducts(Array.isArray(prodRes.data) ? prodRes.data : []);
+
+        if (catRes.headers["content-type"]?.includes("json")) {
+          setCategories(Array.isArray(catRes.data) ? catRes.data : []);
+        } else {
+          console.error("Réponse catégories non JSON :", catRes.data);
+          setCategories([]);
+        }
+
+        if (prodRes.headers["content-type"]?.includes("json")) {
+          setProducts(Array.isArray(prodRes.data) ? prodRes.data : []);
+        } else {
+          console.error("Réponse produits non JSON :", prodRes.data);
+          setProducts([]);
+        }
       } catch (err) {
-        console.error('Erreur chargement données:', err);
-        setMessageBox({ message: 'Erreur lors du chargement des données.', type: 'info' });
+        console.error("❌ Erreur chargement données:", err);
+        setMessageBox({ message: "Erreur lors du chargement des données.", type: "info" });
         setCategories([]);
         setProducts([]);
       } finally {
@@ -108,17 +89,17 @@ export default function ProductManagement() {
   const handleSaveProduct = async (product) => {
     try {
       if (product.id) {
-        const res = await axios.put(`/api/products/${product.id}`, product);
-        setProducts(products.map(p => p.id === product.id ? res.data : p));
-        setMessageBox({ message: 'Produit mis à jour avec succès.', type: 'info' });
+        const res = await apiClient.put(`/api/products/${product.id}`, product);
+        setProducts(products.map((p) => (p.id === product.id ? res.data : p)));
+        setMessageBox({ message: "Produit mis à jour avec succès.", type: "info" });
       } else {
-        const res = await axios.post('/api/products', product);
+        const res = await apiClient.post("/api/products", product);
         setProducts([...products, res.data]);
-        setMessageBox({ message: 'Produit ajouté avec succès.', type: 'info' });
+        setMessageBox({ message: "Produit ajouté avec succès.", type: "info" });
       }
     } catch (err) {
-      console.error(err);
-      setMessageBox({ message: 'Erreur lors de la sauvegarde.', type: 'info' });
+      console.error("❌ Erreur sauvegarde produit:", err);
+      setMessageBox({ message: "Erreur lors de la sauvegarde.", type: "info" });
     }
     setIsFormVisible(false);
     setCurrentProduct(null);
@@ -126,34 +107,34 @@ export default function ProductManagement() {
 
   // 🔄 Mise à jour stock
   const handleUpdateStock = async (productId, newQuantity) => {
-    const product = products.find(p => p.id === productId);
+    const product = products.find((p) => p.id === productId);
     if (!product) return;
     const diff = newQuantity - (product.stock_quantity || 0);
     if (diff === 0) return;
 
     try {
-      const type = diff > 0 ? 'entry' : 'exit';
+      const type = diff > 0 ? "entry" : "exit";
       const quantity = Math.abs(diff);
-      await axios.post(`/api/products/${productId}/stock/movements`, { type, quantity });
-      const updatedProduct = (await axios.get(`/api/products/${productId}`)).data;
-      setProducts(products.map(p => p.id === productId ? updatedProduct : p));
+      await apiClient.post(`/api/products/${productId}/stock/movements`, { type, quantity });
+      const updatedProduct = (await apiClient.get(`/api/products/${productId}`)).data;
+      setProducts(products.map((p) => (p.id === productId ? updatedProduct : p)));
     } catch (err) {
-      console.error('Erreur mise à jour stock:', err);
-      setMessageBox({ message: 'Erreur lors de la mise à jour du stock.', type: 'info' });
+      console.error("❌ Erreur mise à jour stock:", err);
+      setMessageBox({ message: "Erreur lors de la mise à jour du stock.", type: "info" });
     }
   };
 
   // 📊 Générer rapport
   const handleGenerateReport = async () => {
     try {
-      const res = await axios.get('/api/reports/stock', {
-        params: { startDate: reportStart, endDate: reportEnd }
+      const res = await apiClient.get("/api/reports/stock", {
+        params: { startDate: reportStart, endDate: reportEnd },
       });
       setStockReport(Array.isArray(res.data) ? res.data : []);
       setIsReportModalVisible(true);
     } catch (err) {
-      console.error('Erreur génération rapport:', err);
-      setMessageBox({ message: 'Erreur lors de la génération du rapport.', type: 'info' });
+      console.error("❌ Erreur génération rapport:", err);
+      setMessageBox({ message: "Erreur lors de la génération du rapport.", type: "info" });
       setStockReport([]);
     }
   };
