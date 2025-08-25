@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Edit } from 'lucide-react';
 
-// Liste des entreprises
 const companies = [
   { slug: "africanut-fish-market", name: "AFRICANUT FISH MARKET" },
   { slug: "magaton-provender", name: "MAGATON PROVENDER" },
@@ -13,7 +12,7 @@ const companies = [
 const AUTH_TOKEN_KEY = 'token';
 const API_BASE = 'https://africanut-backend-production.up.railway.app';
 
-// Helper fetch sécurisé avec token
+// Helper fetch sécurisé
 const fetchWithAuth = async (url, options = {}) => {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) throw new Error("Aucun token trouvé. Veuillez vous connecter.");
@@ -30,7 +29,7 @@ export default function HR() {
   const CLOUDINARY_CLOUD_NAME = 'djhyztec8';
   const CLOUDINARY_UPLOAD_PRESET = 'africanut';
 
-  const [items, setItems] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [form, setForm] = useState({
     name: '', role: '', companySlug: '', date_of_birth: '', email: '',
     nationality: '', contract_type: '', phone: '', address: '', salary: '', photo_url: ''
@@ -50,7 +49,7 @@ export default function HR() {
     setError(null);
     try {
       const data = await fetchWithAuth('/api/employees');
-      setItems(data);
+      setEmployees(data);
     } catch (err) {
       console.error(err);
       setError(err.message);
@@ -87,7 +86,7 @@ export default function HR() {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
       }
-      loadEmployees();
+      await loadEmployees();
       resetForm();
       setEditMode(false);
       setCurrentEmployeeId(null);
@@ -102,10 +101,11 @@ export default function HR() {
     setIsLoading(true); setError(null);
     try {
       await fetchWithAuth(`/api/employees/${employeeToDelete.id}`, { method: 'DELETE' });
-      loadEmployees();
+      await loadEmployees();
       setShowDeleteModal(false);
       setEmployeeToDelete(null);
-    } catch (err) { setError(err.message); } finally { setIsLoading(false); }
+    } catch (err) { setError(err.message); }
+    finally { setIsLoading(false); }
   };
   const cancelDelete = () => { setShowDeleteModal(false); setEmployeeToDelete(null); };
 
@@ -148,7 +148,7 @@ export default function HR() {
     finally { setIsUploading(false); }
   };
 
-  const filteredItems = items.filter(e =>
+  const filteredEmployees = employees.filter(e =>
     e.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.role?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.company?.name?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -200,14 +200,14 @@ export default function HR() {
         {/* Liste employés */}
         <div className="space-y-3">
           <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-lg">
-            <h3 className="font-semibold text-xl">Effectifs ({filteredItems.length})</h3>
+            <h3 className="font-semibold text-xl">Effectifs ({filteredEmployees.length})</h3>
             <input placeholder="Rechercher..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="px-3 py-2 border rounded-xl w-60"/>
           </div>
 
           {isLoading && <p className="text-center text-neutral-500 mt-4">Chargement des données...</p>}
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredItems.map(e => {
+            {filteredEmployees.map(e => {
               const company = companies.find(c => c.slug === e.company?.slug);
               return (
                 <div key={e.id} className="bg-white rounded-2xl p-5 shadow-lg relative">
