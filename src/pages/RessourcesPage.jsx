@@ -823,7 +823,7 @@ return (
           <Routes>
             <Route path="webinaire" element={<WebinarList />} />
             <Route path="articles" element={<ArticleList />} />
-            <Route path="livre-blanc" element={<LivreBlancList />} />
+            <Route path="livre-blanc" element={<LivresBlancList />} />
             <Route path="brochures" element={<BrochuresList />} />
             <Route path="communiques" element={<CommuniquesList />} />
             <Route path="mediatheque" element={<MediathequeList />} />
