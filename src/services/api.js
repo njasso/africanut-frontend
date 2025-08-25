@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // URL de base : priorise la variable d'environnement, sinon Railway
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://africanut-backend-postgres-production.up.railway.app';
+const API_URL = import.meta.env.VITE_API_URL || 'https://africanut-backend-postgres-production.up.railway.app';
 
 // Token stocké en mémoire + localStorage
 let token = localStorage.getItem('token') || null;
