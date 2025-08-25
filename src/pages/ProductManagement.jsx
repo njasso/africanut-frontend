@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { PlusCircle, Trash2, Edit, Minus, Plus, FileText } from "lucide-react";
-import apiClient from "../services/api.js"; // ✅ utilise ton instance axios
+import { apiClient } from "../services/api.js";
 import ProductForm from "../components/ProductForm.jsx";
 
 // Composants modaux
