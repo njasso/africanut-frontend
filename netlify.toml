@@ -1,6 +1,32 @@
 [build]
-  command = "npx vite build"
+  command = "npm run build"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "18"
+  NPM_FLAGS = "--production=false"
+
+[context.production.environment]
+  VITE_APPWRITE_ENDPOINT = "https://fra.cloud.appwrite.io/v1"
+  VITE_APPWRITE_PROJECT_ID = "6917d60c001a8ea43024"
+  VITE_NODE_ENV = "production"
+
+[context.deploy-preview.environment]
+  VITE_APPWRITE_ENDPOINT = "https://fra.cloud.appwrite.io/v1"
+  VITE_APPWRITE_PROJECT_ID = "6917d60c001a8ea43024"
+  VITE_NODE_ENV = "development"
+
+# Redirections pour Appwrite Functions
+[[redirects]]
+  from = "/api/functions/*"
+  to = "https://fra.cloud.appwrite.io/v1/functions/:splat"
+  status = 200
+  force = true
+
+# Headers de sécurité
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
