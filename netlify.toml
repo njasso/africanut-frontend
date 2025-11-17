@@ -1,5 +1,41 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+  NPM_FLAGS = "--prefix=/opt/build/repo"
+
+[context.production.environment]
+  VITE_API_URL = "https://africanut-backend-postgres-production.up.railway.app"
+  VITE_APPWRITE_ENDPOINT = "https://fra.cloud.appwrite.io/v1"
+  VITE_APPWRITE_PROJECT_ID = "6917d60c001a8ea43024"
+  VITE_NODE_ENV = "production"
+
+[context.deploy-preview.environment]
+  VITE_API_URL = "https://africanut-backend-postgres-production.up.railway.app"
+  VITE_APPWRITE_ENDPOINT = "https://fra.cloud.appwrite.io/v1"
+  VITE_APPWRITE_PROJECT_ID = "6917d60c001a8ea43024"
+  VITE_NODE_ENV = "development"
+
+# Redirections pour l'API
 [[redirects]]
   from = "/api/*"
   to = "https://africanut-backend-postgres-production.up.railway.app/:splat"
   status = 200
   force = true
+
+# Headers de sécurité
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Cache pour les assets statiques
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
