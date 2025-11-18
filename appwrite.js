@@ -1,17 +1,15 @@
-import { Client, Account, Databases, Storage, ID } from 'appwrite';
+// appwrite.js (à la racine)
+import { Client, Account, Databases, Storage, ID, Query } from 'appwrite';
 
-// Configuration Appwrite
 const client = new Client();
-
 client
   .setEndpoint('https://fra.cloud.appwrite.io/v1')
   .setProject('6917d60c001a8ea43024');
 
-// Services Appwrite
 export const account = new Account(client);
 export const databases = new Databases(client);
 export const storage = new Storage(client);
-export { ID };
+export { ID, Query };
 
 // Configuration des bases de données
 export const DATABASE_CONFIG = {
@@ -26,39 +24,55 @@ export const DATABASE_CONFIG = {
   }
 };
 
-// Fonctions utilitaires
-export const appwriteService = {
-  // Test de connexion
+// Service Appwrite principal - CECI DOIT ÊTRE EXPORTÉ
+export const appwrite = {
+  client,
+  account,
+  databases,
+  storage,
+  config: DATABASE_CONFIG,
+  
+  // Méthodes utilitaires
   async healthCheck() {
     try {
-      const response = await databases.listDocuments(
-        DATABASE_CONFIG.MAIN,
-        DATABASE_CONFIG.COLLECTIONS.COMPANIES,
-        []
+      const result = await this.databases.listDocuments(
+        this.config.MAIN,
+        this.config.COLLECTIONS.COMPANIES,
+        [Query.limit(1)]
       );
-      return { success: true, data: response };
+      return { 
+        status: 'connected', 
+        documents: result.total
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { 
+        status: 'error', 
+        message: error.message 
+      };
     }
   },
 
-  // Récupérer toutes les companies
-  async getCompanies() {
-    return await databases.listDocuments(
-      DATABASE_CONFIG.MAIN,
-      DATABASE_CONFIG.COLLECTIONS.COMPANIES
+  async getCompanies(queries = []) {
+    return await this.databases.listDocuments(
+      this.config.MAIN,
+      this.config.COLLECTIONS.COMPANIES,
+      queries
     );
   },
 
-  // Créer une company
   async createCompany(companyData) {
-    return await databases.createDocument(
-      DATABASE_CONFIG.MAIN,
-      DATABASE_CONFIG.COLLECTIONS.COMPANIES,
+    return await this.databases.createDocument(
+      this.config.MAIN,
+      this.config.COLLECTIONS.COMPANIES,
       ID.unique(),
-      companyData
+      {
+        ...companyData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
     );
   }
 };
 
-export default client;
+// Export par défaut
+export default appwrite;
