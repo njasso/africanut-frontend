@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ShoppingCart, Trash2, Search, ChevronDown, X, ChevronLeft, ChevronRight, Plus, Minus, AlertTriangle } from 'lucide-react';
-import axios from 'axios';
 
-// Configuration d'environnement
-const API_BASE_URL = "https://africanut-backend-postgres-production.up.railway.app";
+// Configuration Appwrite
+const APPWRITE_CONFIG = {
+  endpoint: 'https://fra.cloud.appwrite.io/v1',
+  projectId: '6917d60c001a8ea43024',
+  functionId: '6917e2c70008c7f35ac9'
+};
+
+// ID de l'entreprise (à adapter selon votre base de données)
 const companyId = '4809480a-c8cb-4990-afd7-e9337993825e';
-
 
 // Composant pour afficher des messages modaux
 const MessageBox = ({ message, onClose, type = 'info' }) => {
@@ -17,7 +21,6 @@ const MessageBox = ({ message, onClose, type = 'info' }) => {
     }
   };
 
-  // Fermer avec la touche Escape
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') onClose();
@@ -63,11 +66,10 @@ const ProductSkeleton = () => (
 );
 
 // Composant pour la prévisualisation du produit
-const ProductPreview = ({ product, onClose, onAddToCart, scrollCarousel, carouselRef }) => {
+const ProductPreview = ({ product, onClose, onAddToCart }) => {
   const [quantityToAdd, setQuantityToAdd] = useState(1);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // Navigation clavier dans le modal
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') onClose();
@@ -165,7 +167,6 @@ const ProductPreview = ({ product, onClose, onAddToCart, scrollCarousel, carouse
         </p>
       </div>
 
-      {/* Choix de la quantité */}
       <div className="flex items-center justify-center gap-4 my-4">
         <button
           onClick={() => setQuantityToAdd(q => Math.max(1, q - 1))}
@@ -179,8 +180,6 @@ const ProductPreview = ({ product, onClose, onAddToCart, scrollCarousel, carouse
           onClick={() => {
             if (quantityToAdd < product.stock_quantity) {
               setQuantityToAdd(q => q + 1);
-            } else {
-              // Gérer l'affichage d'erreur via un callback parent si nécessaire
             }
           }}
           className="p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition focus:outline-none focus:ring-2 focus:ring-brand-green"
@@ -203,6 +202,55 @@ const ProductPreview = ({ product, onClose, onAddToCart, scrollCarousel, carouse
   );
 };
 
+// Service API pour Appwrite Functions
+const apiService = {
+  // Exécuter une fonction Appwrite
+  async executeFunction(data = {}) {
+    try {
+      const response = await fetch(
+        `${APPWRITE_CONFIG.endpoint}/functions/${APPWRITE_CONFIG.functionId}/execution`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Appwrite-Project': APPWRITE_CONFIG.projectId,
+          },
+          body: JSON.stringify(data)
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      throw new Error(`API error: ${error.message}`);
+    }
+  },
+
+  // Récupérer les produits
+  async getProducts() {
+    const result = await this.executeFunction({ path: '/products' });
+    return result.data || result;
+  },
+
+  // Créer une commande
+  async createOrder(orderData) {
+    const result = await this.executeFunction({
+      method: 'POST',
+      path: '/orders',
+      body: orderData
+    });
+    return result.data || result;
+  },
+
+  // Health check
+  async healthCheck() {
+    return await this.executeFunction({ path: '/health' });
+  }
+};
+
 export default function Store() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
@@ -220,7 +268,7 @@ export default function Store() {
   });
   const [showCustomerForm, setShowCustomerForm] = useState(false);
 
-  // Utiliser useMemo pour les produits filtrés
+  // Produits filtrés
   const filteredProducts = useMemo(() => {
     let result = products;
     if (selectedCategory !== 'all') {
@@ -239,18 +287,17 @@ export default function Store() {
   // Charger les produits et le panier
   useEffect(() => {
     const controller = new AbortController();
-    const signal = controller.signal;
 
     const fetchData = async () => {
       try {
-        const [productsRes, savedCart, savedCustomerInfo] = await Promise.allSettled([
-          axios.get(`${API_BASE_URL}/api/products`, { signal }),
+        const [productsData, savedCart, savedCustomerInfo] = await Promise.allSettled([
+          apiService.getProducts(),
           localStorage.getItem('cart'),
           localStorage.getItem('customerInfo')
         ]);
 
-        if (productsRes.status === 'fulfilled') {
-          const fetchedProducts = productsRes.value.data;
+        if (productsData.status === 'fulfilled') {
+          const fetchedProducts = productsData.value;
           setProducts(fetchedProducts);
           const uniqueCategories = [...new Set(fetchedProducts.map(p => p.category?.name || p.category))];
           setCategories(uniqueCategories);
@@ -264,11 +311,9 @@ export default function Store() {
           setCustomerInfo(JSON.parse(savedCustomerInfo.value));
         }
       } catch (err) {
-        if (!axios.isCancel(err)) {
-          console.error('Erreur lors du chargement des produits:', err);
-          setMessageBox('Impossible de charger les produits. Veuillez réessayer plus tard.');
-          setMessageType('error');
-        }
+        console.error('Erreur lors du chargement des produits:', err);
+        setMessageBox('Impossible de charger les produits. Veuillez réessayer plus tard.');
+        setMessageType('error');
       } finally {
         setIsLoading(false);
       }
@@ -284,14 +329,14 @@ export default function Store() {
     localStorage.setItem('customerInfo', JSON.stringify(customerInfo));
   }, [cart, customerInfo]);
 
-  // Vérifier le stock avant d'ajouter au panier
+  // Vérifier le stock
   const checkStock = useCallback((product, quantity) => {
     const cartItem = cart.find(item => item.id === product.id);
     const alreadyInCart = cartItem ? cartItem.quantity : 0;
     return product.stock_quantity >= (alreadyInCart + quantity);
   }, [cart]);
 
-  // Gestion panier avec vérification de stock
+  // Gestion panier
   const handleAddToCart = useCallback((product, quantity) => {
     if (!checkStock(product, quantity)) {
       setMessageBox(`Stock insuffisant pour ${product.name}. Il ne reste que ${product.stock_quantity} unité(s).`);
@@ -362,16 +407,6 @@ Numéro de commande: #${orderId}`;
     return message;
   }, [cart, customerInfo]);
 
-  const saveOrderToDatabase = async (orderData) => {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/api/orders`, orderData);
-      return response.data;
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde de la commande:', error);
-      throw error;
-    }
-  };
-
   const handleOrder = useCallback(async () => {
     if (cart.length === 0) {
       setMessageBox('Votre panier est vide.');
@@ -385,7 +420,7 @@ Numéro de commande: #${orderId}`;
       return;
     }
 
-    // Vérifier à nouveau le stock avant de finaliser la commande
+    // Vérifier le stock
     const outOfStockItems = cart.filter(item => {
       const product = products.find(p => p.id === item.id);
       return product && item.quantity > product.stock_quantity;
@@ -398,7 +433,7 @@ Numéro de commande: #${orderId}`;
       return;
     }
 
-    // Demander les informations client si non renseignées
+    // Vérifier les informations client
     if (!customerInfo.name || !customerInfo.phone) {
       setShowCustomerForm(true);
       return;
@@ -407,17 +442,24 @@ Numéro de commande: #${orderId}`;
     try {
       const orderData = {
         companyId: companyId,
+        customerName: customerInfo.name,
+        customerPhone: customerInfo.phone,
+        customerAddress: customerInfo.address,
         shippingAddress: customerInfo.address,
         items: cart.map(item => ({
           productId: item.id,
+          productName: item.name,
           quantity: item.quantity,
           priceAtPurchase: item.price,
+          total: item.price * item.quantity
         })),
+        totalAmount: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+        status: 'pending'
       };
 
-      const savedOrder = await saveOrderToDatabase(orderData);
+      const savedOrder = await apiService.createOrder(orderData);
       
-      const message = generateWhatsAppMessage(savedOrder.id);
+      const message = generateWhatsAppMessage(savedOrder.id || Date.now());
       const whatsappLink = `https://wa.me/237620370286?text=${encodeURIComponent(message)}`;
       
       setCart([]);
@@ -472,6 +514,7 @@ Numéro de commande: #${orderId}`;
       {messageBox && (
         <MessageBox message={messageBox} onClose={() => setMessageBox(null)} type={messageType} />
       )}
+      
       {/* Formulaire d'informations client */}
       {showCustomerForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -480,15 +523,35 @@ Numéro de commande: #${orderId}`;
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Nom complet *</label>
-                <input type="text" value={customerInfo.name} onChange={(e) => handleCustomerInfoChange('name', e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="Votre nom" required />
+                <input 
+                  type="text" 
+                  value={customerInfo.name} 
+                  onChange={(e) => handleCustomerInfoChange('name', e.target.value)} 
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" 
+                  placeholder="Votre nom" 
+                  required 
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Téléphone *</label>
-                <input type="tel" value={customerInfo.phone} onChange={(e) => handleCustomerInfoChange('phone', e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="Votre numéro de téléphone" required />
+                <input 
+                  type="tel" 
+                  value={customerInfo.phone} 
+                  onChange={(e) => handleCustomerInfoChange('phone', e.target.value)} 
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" 
+                  placeholder="Votre numéro de téléphone" 
+                  required 
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Adresse</label>
-                <input type="text" value={customerInfo.address} onChange={(e) => handleCustomerInfoChange('address', e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="Votre adresse" />
+                <input 
+                  type="text" 
+                  value={customerInfo.address} 
+                  onChange={(e) => handleCustomerInfoChange('address', e.target.value)} 
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" 
+                  placeholder="Votre adresse" 
+                />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
@@ -500,7 +563,8 @@ Numéro de commande: #${orderId}`;
               </button>
               <button
                 onClick={handleOrder}
-                className="px-4 py-2 bg-brand-green text-white rounded-lg font-semibold hover:bg-green-700 transition"
+                disabled={!customerInfo.name || !customerInfo.phone}
+                className="px-4 py-2 bg-brand-green text-white rounded-lg font-semibold hover:bg-green-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 Confirmer
               </button>
@@ -509,7 +573,7 @@ Numéro de commande: #${orderId}`;
         </div>
       )}
 
-      {/* Vue principale (produits) */}
+      {/* Vue principale */}
       <div className="relative z-10 max-w-7xl mx-auto">
         {/* Header avec recherche et panier */}
         <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 sticky top-0 z-20">
@@ -703,13 +767,11 @@ Numéro de commande: #${orderId}`;
               ))}
             </div>
 
-            {/* Récapitulatif et bouton de commande */}
             <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="flex justify-between items-center font-bold text-lg text-brand-brown">
                 Total: {cart.reduce((sum, item) => sum + item.price * item.quantity, 0).toLocaleString()} F CFA
               </div>
               
-              {/* Informations client résumées */}
               {(customerInfo.name || customerInfo.phone) && (
                 <div className="mt-4 p-3 bg-gray-100 rounded-lg">
                   <h4 className="font-semibold mb-2">Informations de livraison:</h4>
@@ -733,7 +795,6 @@ Numéro de commande: #${orderId}`;
                   return product && item.quantity > product.stock_quantity;
                 })}
               >
-                {/* SVG de l'icône WhatsApp */}
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-white" aria-hidden="true"><path d="M12.04 2C7.388 2 3.63 5.768 3.63 10.42v3.136L2 19.344l4.135-1.527L6.64 19.344l.115.228 3.504 3.498 3.682-.924 3.75 1.096L22.08 19.344l-1.63-1.527V10.42c0-4.652-3.758-8.42-8.42-8.42zm.006 1.758c3.774 0 6.84 3.066 6.84 6.84V16.63L18.4 18.252l-2.09-.646-1.506.646-1.464-.328-1.498.328-1.53.646-1.488-.646-1.436.328-1.488-.328L6.46 18.252l-.962-.958-1.543.646V10.42c0-3.774 3.066-6.84 6.84-6.84zm-.006 2.898c-1.87 0-3.386 1.516-3.386 3.386 0 1.87 1.516 3.386 3.386 3.386 1.87 0 3.386-1.516 3.386-3.386 0-1.87-1.516-3.386-3.386-3.386zM12.04 12c.968 0 1.758.79 1.758 1.758 0 .968-.79 1.758-1.758 1.758-.968 0-1.758-.79-1.758-1.758 0-.968.79-1.758 1.758-1.758z"/></svg> Commander via WhatsApp
               </button>
             </div>
