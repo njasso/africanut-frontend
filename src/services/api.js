@@ -1,6 +1,6 @@
 // src/services/api.js
 import axios from 'axios';
-import { appwrite, ID } from './appwrite';
+import { appwrite, ID } from '../../appwrite.js';
 
 // Configuration Appwrite
 const APPWRITE_ENDPOINT = 'https://fra.cloud.appwrite.io/v1';
