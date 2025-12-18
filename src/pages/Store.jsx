@@ -2,10 +2,53 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ShoppingCart, Trash2, Search, ChevronDown, X, ChevronLeft, ChevronRight, Plus, Minus, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 
-// Configuration d'environnement
-const API_BASE_URL = "https://africanut-backend-postgres-production.up.railway.app";
+// Configuration d'API
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://africanut-backend-postgres.onrender.com';
 const companyId = '4809480a-c8cb-4990-afd7-e9337993825e';
 
+// Fonctions pour gérer le token JWT
+const getToken = () => localStorage.getItem('token');
+const setToken = (t) => localStorage.setItem('token', t);
+
+// Configuration axios
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: false,
+});
+
+// Intercepteur pour ajouter le token JWT
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Fonction API générique
+export async function api(path, options = {}) {
+  const headers = options.headers || {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(API_BASE_URL + path, { ...options, headers });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || `Erreur API: ${res.status}`);
+  }
+
+  return res.headers.get('content-type')?.includes('application/json')
+    ? res.json()
+    : res.text();
+}
 
 // Composant pour afficher des messages modaux
 const MessageBox = ({ message, onClose, type = 'info' }) => {
@@ -17,7 +60,6 @@ const MessageBox = ({ message, onClose, type = 'info' }) => {
     }
   };
 
-  // Fermer avec la touche Escape
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') onClose();
@@ -63,11 +105,10 @@ const ProductSkeleton = () => (
 );
 
 // Composant pour la prévisualisation du produit
-const ProductPreview = ({ product, onClose, onAddToCart, scrollCarousel, carouselRef }) => {
+const ProductPreview = ({ product, onClose, onAddToCart }) => {
   const [quantityToAdd, setQuantityToAdd] = useState(1);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // Navigation clavier dans le modal
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') onClose();
@@ -165,7 +206,6 @@ const ProductPreview = ({ product, onClose, onAddToCart, scrollCarousel, carouse
         </p>
       </div>
 
-      {/* Choix de la quantité */}
       <div className="flex items-center justify-center gap-4 my-4">
         <button
           onClick={() => setQuantityToAdd(q => Math.max(1, q - 1))}
@@ -179,8 +219,6 @@ const ProductPreview = ({ product, onClose, onAddToCart, scrollCarousel, carouse
           onClick={() => {
             if (quantityToAdd < product.stock_quantity) {
               setQuantityToAdd(q => q + 1);
-            } else {
-              // Gérer l'affichage d'erreur via un callback parent si nécessaire
             }
           }}
           className="p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition focus:outline-none focus:ring-2 focus:ring-brand-green"
@@ -236,15 +274,16 @@ export default function Store() {
     return result;
   }, [products, searchQuery, selectedCategory]);
 
-  // Charger les produits et le panier
+  // Charger les produits et le panier via l'API
   useEffect(() => {
     const controller = new AbortController();
     const signal = controller.signal;
 
     const fetchData = async () => {
       try {
+        // Utiliser apiClient (avec intercepteur de token) au lieu d'axios directement
         const [productsRes, savedCart, savedCustomerInfo] = await Promise.allSettled([
-          axios.get(`${API_BASE_URL}/api/products`, { signal }),
+          apiClient.get('/api/products', { signal }),
           localStorage.getItem('cart'),
           localStorage.getItem('customerInfo')
         ]);
@@ -362,12 +401,29 @@ Numéro de commande: #${orderId}`;
     return message;
   }, [cart, customerInfo]);
 
+  // Fonction pour sauvegarder la commande via l'API
   const saveOrderToDatabase = async (orderData) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/orders`, orderData);
+      // Utiliser apiClient pour inclure automatiquement le token JWT
+      const response = await apiClient.post('/api/orders', orderData);
       return response.data;
     } catch (error) {
       console.error('Erreur lors de la sauvegarde de la commande:', error);
+      
+      // Si c'est une erreur d'authentification, proposer de se reconnecter
+      if (error.response?.status === 401) {
+        setMessageBox('Session expirée. Veuillez vous reconnecter.');
+        setMessageType('error');
+        // Vous pourriez rediriger vers la page de connexion ici
+        // navigate('/login');
+      } else if (error.response?.status === 403) {
+        setMessageBox('Vous n\'avez pas les permissions nécessaires pour créer une commande.');
+        setMessageType('error');
+      } else {
+        setMessageBox('Erreur lors de l\'enregistrement de la commande. Veuillez réessayer.');
+        setMessageType('error');
+      }
+      
       throw error;
     }
   };
@@ -415,19 +471,22 @@ Numéro de commande: #${orderId}`;
         })),
       };
 
+      // Sauvegarder la commande via l'API
       const savedOrder = await saveOrderToDatabase(orderData);
       
-      const message = generateWhatsAppMessage(savedOrder.id);
+      const message = generateWhatsAppMessage(savedOrder.id || savedOrder.orderId);
       const whatsappLink = `https://wa.me/237620370286?text=${encodeURIComponent(message)}`;
       
+      // Vider le panier après la commande
       setCart([]);
       setMessageBox('Commande enregistrée ! Redirection vers WhatsApp...');
       setMessageType('info');
+      
+      // Ouvrir WhatsApp après un court délai
       setTimeout(() => window.open(whatsappLink, '_blank'), 1500);
     } catch (error) {
+      // L'erreur est déjà gérée dans saveOrderToDatabase
       console.error('Erreur lors de la commande:', error);
-      setMessageBox('Erreur lors de l\'enregistrement de la commande. Veuillez réessayer.');
-      setMessageType('error');
     }
   }, [cart, products, customerInfo, companyId, generateWhatsAppMessage]);
 
@@ -472,6 +531,7 @@ Numéro de commande: #${orderId}`;
       {messageBox && (
         <MessageBox message={messageBox} onClose={() => setMessageBox(null)} type={messageType} />
       )}
+      
       {/* Formulaire d'informations client */}
       {showCustomerForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -480,15 +540,35 @@ Numéro de commande: #${orderId}`;
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Nom complet *</label>
-                <input type="text" value={customerInfo.name} onChange={(e) => handleCustomerInfoChange('name', e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="Votre nom" required />
+                <input 
+                  type="text" 
+                  value={customerInfo.name} 
+                  onChange={(e) => handleCustomerInfoChange('name', e.target.value)} 
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" 
+                  placeholder="Votre nom" 
+                  required 
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Téléphone *</label>
-                <input type="tel" value={customerInfo.phone} onChange={(e) => handleCustomerInfoChange('phone', e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="Votre numéro de téléphone" required />
+                <input 
+                  type="tel" 
+                  value={customerInfo.phone} 
+                  onChange={(e) => handleCustomerInfoChange('phone', e.target.value)} 
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" 
+                  placeholder="Votre numéro de téléphone" 
+                  required 
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Adresse</label>
-                <input type="text" value={customerInfo.address} onChange={(e) => handleCustomerInfoChange('address', e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="Votre adresse" />
+                <input 
+                  type="text" 
+                  value={customerInfo.address} 
+                  onChange={(e) => handleCustomerInfoChange('address', e.target.value)} 
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green" 
+                  placeholder="Votre adresse" 
+                />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
@@ -733,7 +813,6 @@ Numéro de commande: #${orderId}`;
                   return product && item.quantity > product.stock_quantity;
                 })}
               >
-                {/* SVG de l'icône WhatsApp */}
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-white" aria-hidden="true"><path d="M12.04 2C7.388 2 3.63 5.768 3.63 10.42v3.136L2 19.344l4.135-1.527L6.64 19.344l.115.228 3.504 3.498 3.682-.924 3.75 1.096L22.08 19.344l-1.63-1.527V10.42c0-4.652-3.758-8.42-8.42-8.42zm.006 1.758c3.774 0 6.84 3.066 6.84 6.84V16.63L18.4 18.252l-2.09-.646-1.506.646-1.464-.328-1.498.328-1.53.646-1.488-.646-1.436.328-1.488-.328L6.46 18.252l-.962-.958-1.543.646V10.42c0-3.774 3.066-6.84 6.84-6.84zm-.006 2.898c-1.87 0-3.386 1.516-3.386 3.386 0 1.87 1.516 3.386 3.386 3.386 1.87 0 3.386-1.516 3.386-3.386 0-1.87-1.516-3.386-3.386-3.386zM12.04 12c.968 0 1.758.79 1.758 1.758 0 .968-.79 1.758-1.758 1.758-.968 0-1.758-.79-1.758-1.758 0-.968.79-1.758 1.758-1.758z"/></svg> Commander via WhatsApp
               </button>
             </div>
