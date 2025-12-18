@@ -10,37 +10,54 @@ const companies = [
   { slug: "gic-ocenaut", name: "GIC OCENAUT" }
 ];
 
-/** ---- Config ---- */
+/** ---- Configuration d'API commune ---- */
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://africanut-backend-postgres.onrender.com';
 const AUTH_TOKEN_KEY = 'token';
-const API_URL = 'https://africanut-backend-production.up.railway.app'; // Railway
 
-/** ---- Fetch helper avec Bearer token ---- */
-const fetchWithAuth = async (url, options = {}) => {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) throw new Error("Aucun token trouvé. Veuillez vous connecter.");
-  const headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+// Configuration axios commune
+import axios from 'axios';
 
-  // Toujours envoyer Content-Type quand body JSON
-  const needsJson = options.body && !headers['Content-Type'];
-  const finalHeaders = needsJson ? { ...headers, 'Content-Type': 'application/json' } : headers;
+const getToken = () => localStorage.getItem(AUTH_TOKEN_KEY);
+const setToken = (t) => localStorage.setItem(AUTH_TOKEN_KEY, t);
 
-  // IMPORTANT : même domaine externe → pas besoin de credentials si JWT en header
-  const response = await fetch(`${API_URL}${url}`, { ...options, headers: finalHeaders, mode: 'cors' });
+// Client API configuré
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: false,
+});
 
-  if (!response.ok) {
-    // Si le serveur n'envoie pas du JSON (ex: CORS bloqué → HTML), éviter .json() qui crashe
-    let errorMessage = `Erreur API. Statut: ${response.status}`;
-    try {
-      const maybeJson = await response.json();
-      if (maybeJson?.error) errorMessage = maybeJson.error;
-    } catch {
-      // Laisser errorMessage par défaut
+// Intercepteur pour ajouter le token JWT
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    throw new Error(errorMessage);
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Fonction API générique (compatibilité avec fetch)
+const api = async (path, options = {}) => {
+  const headers = options.headers || {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(API_BASE_URL + path, { ...options, headers });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || `Erreur API: ${res.status}`);
   }
 
-  // Même si la liste est vide, c’est du JSON valide
-  return response.json();
+  return res.headers.get('content-type')?.includes('application/json')
+    ? res.json()
+    : res.text();
 };
 
 export default function HR() {
@@ -67,25 +84,35 @@ export default function HR() {
   const [employeeToDelete, setEmployeeToDelete] = useState(null);
 
   // Tri + pagination
-  const [sortField, setSortField] = useState('name'); // name | role | company | salary | date_of_birth
-  const [sortOrder, setSortOrder] = useState('asc');  // asc | desc
+  const [sortField, setSortField] = useState('name');
+  const [sortOrder, setSortOrder] = useState('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(6);
 
-  /** ---- Load employees ---- */
+  /** ---- Load employees via apiClient ---- */
   const loadEmployees = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     setCorsHint(false);
     try {
-      const data = await fetchWithAuth('/api/employees');
-      setEmployees(data);
+      // Utiliser apiClient au lieu de fetchWithAuth
+      const response = await apiClient.get('/api/employees');
+      setEmployees(response.data);
     } catch (err) {
       console.error("Erreur récupération employés:", err);
-      setError(err.message);
+      let errorMessage = err.message;
+      
+      // Extraire le message d'erreur de la réponse axios
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      }
+      
+      setError(errorMessage);
 
-      // Indice classique d'un blocage CORS côté API (préflight sans A-C-A-Origin)
-      if (/Erreur API\. Statut: 4\d\d/.test(err.message) || /Failed to fetch/i.test(err.message)) {
+      // Indice classique d'un blocage CORS
+      if (err.message.includes('Network Error') || err.message.includes('CORS')) {
         setCorsHint(true);
       }
     } finally {
@@ -94,8 +121,11 @@ export default function HR() {
   }, []);
 
   useEffect(() => {
-    if (localStorage.getItem(AUTH_TOKEN_KEY)) loadEmployees();
-    else setError("Connectez-vous pour accéder aux employés.");
+    if (getToken()) {
+      loadEmployees();
+    } else {
+      setError("Connectez-vous pour accéder aux employés.");
+    }
   }, [loadEmployees]);
 
   /** ---- Utils ---- */
@@ -107,7 +137,7 @@ export default function HR() {
   const money = (val) =>
     (val || val === 0) ? Number(val).toLocaleString('fr-FR') + ' F CFA' : 'N/A';
 
-  /** ---- Create / Update ---- */
+  /** ---- Create / Update via apiClient ---- */
   const addOrUpdate = async (e) => {
     e.preventDefault();
     if (!form.name || !form.role || !form.companySlug) {
@@ -125,28 +155,30 @@ export default function HR() {
 
     try {
       if (editMode && currentEmployeeId) {
-        await fetchWithAuth(`/api/employees/${currentEmployeeId}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload)
-        });
+        // Mise à jour avec apiClient
+        await apiClient.put(`/api/employees/${currentEmployeeId}`, payload);
       } else {
-        await fetchWithAuth('/api/employees', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
+        // Création avec apiClient
+        await apiClient.post('/api/employees', payload);
       }
       await loadEmployees();
       resetForm();
       setEditMode(false);
       setCurrentEmployeeId(null);
     } catch (err) {
-      setError(err.message);
+      let errorMessage = err.message;
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      }
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  /** ---- Delete ---- */
+  /** ---- Delete via apiClient ---- */
   const remove = (employee) => {
     setEmployeeToDelete(employee);
     setShowDeleteModal(true);
@@ -157,12 +189,16 @@ export default function HR() {
     setIsLoading(true);
     setError(null);
     try {
-      await fetchWithAuth(`/api/employees/${employeeToDelete.id}`, { method: 'DELETE' });
+      await apiClient.delete(`/api/employees/${employeeToDelete.id}`);
       await loadEmployees();
       setShowDeleteModal(false);
       setEmployeeToDelete(null);
     } catch (err) {
-      setError(err.message);
+      let errorMessage = err.message;
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      }
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -265,7 +301,6 @@ export default function HR() {
       let va = getVal(a);
       let vb = getVal(b);
 
-      // Normaliser
       if (typeof va === 'string') va = va.toLowerCase();
       if (typeof vb === 'string') vb = vb.toLowerCase();
 
@@ -300,8 +335,8 @@ export default function HR() {
         {/* Alerte CORS si besoin */}
         {corsHint && (
           <div className="mb-4 p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-800">
-            Le navigateur a bloqué la requête (CORS). Assure-toi que le backend Railway envoie bien
-            <code className="px-1 mx-1 bg-yellow-100 rounded">Access-Control-Allow-Origin: https://africanutindustryplatform.netlify.app</code>
+            Le navigateur a bloqué la requête (CORS). Assure-toi que le backend envoie bien
+            <code className="px-1 mx-1 bg-yellow-100 rounded">Access-Control-Allow-Origin: {window.location.origin}</code>
             et
             <code className="px-1 mx-1 bg-yellow-100 rounded">Access-Control-Allow-Headers: Authorization, Content-Type</code>
             sur <span className="font-semibold">toutes</span> les routes <span className="font-mono">/api/*</span>.
